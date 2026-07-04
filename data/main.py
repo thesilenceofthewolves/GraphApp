@@ -42,53 +42,48 @@ async def main():
         print("3. Make a Graph call")
 
         try:
-    if choice == 0:
-        print("Goodbye...")
+            choice = int(input("> "))
 
-    elif choice == 1:
-        await display_access_token(graph)
+            if choice == 0:
+                print("Goodbye...")
+                break
 
-    elif choice == 2:
-        await list_users(graph)
+            elif choice == 1:
+                await display_access_token(graph)
 
-    elif choice == 3:
-        await make_graph_call(graph)
+            elif choice == 2:
+                await list_users(graph)
 
-    else:
-        print("Invalid choice!")
+            elif choice == 3:
+                await make_graph_call(graph)
 
-except ODataError as e:
-    print("\n=== Microsoft Graph Error ===")
-    if e.error:
-        print(f"Code    : {e.error.code}")
-        print(f"Message : {e.error.message}")
-    else:
-        print(e)
+            else:
+                print("Invalid choice!")
 
-except Exception as e:
-    print("\n=== Authentication / Azure Error ===")
-    print(f"Exception Type : {type(e).__name__}")
-    print(f"Message        : {e}")
+        except ValueError:
+            print("Please enter a number.")
 
-    error = str(e)
+        except ClientAuthenticationError as e:
+            print("\n=== AUTHENTICATION ERROR ===")
+            print(type(e).__name__)
+            print(e)
 
-    if "AADSTS90002" in error:
-        print("\nReason: The Tenant ID is invalid or the tenant does not exist.")
+        except CredentialUnavailableError as e:
+            print("\n=== CREDENTIAL ERROR ===")
+            print(e)
 
-    elif "AADSTS700016" in error:
-        print("\nReason: The Client ID (Application ID) is invalid or the application was not found.")
+        except ODataError as e:
+            print("\n=== MICROSOFT GRAPH ERROR ===")
+            if e.error:
+                print(f"Code    : {e.error.code}")
+                print(f"Message : {e.error.message}")
+            else:
+                print(e)
 
-    elif "AADSTS7000215" in error:
-        print("\nReason: The Client Secret is invalid.")
-
-    elif "AADSTS7000222" in error:
-        print("\nReason: The Client Secret has expired.")
-
-    elif "AADSTS500011" in error:
-        print("\nReason: Microsoft Graph is not configured for this application.")
-
-    else:
-        print("\nNo specific Azure error code was found.")
+        except Exception as e:
+            print("\n=== UNKNOWN ERROR ===")
+            print(type(e).__name__)
+            print(e)
 
 
 async def display_access_token(graph: Graph):
