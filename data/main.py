@@ -11,17 +11,15 @@ from graph import Graph
 async def main():
     print("Python Graph App-Only Tutorial\n")
 
-    # Load settings
+    # Load configuration
     config = configparser.ConfigParser()
 
-    files = config.read(["config.cfg", "config.dev.cfg"])
-
-    if not files:
+    if not config.read(["config.cfg", "config.dev.cfg"]):
         print("Error: No configuration file found.")
         return
 
     if "azure" not in config:
-        print("Error: Missing [azure] section in configuration file.")
+        print("Error: Missing [azure] section in configuration.")
         return
 
     azure_settings = config["azure"]
@@ -30,32 +28,31 @@ async def main():
     required = ["clientId", "tenantId", "clientSecret"]
 
     for key in required:
-        if key not in azure_settings or not azure_settings[key].strip():
+        if not azure_settings.get(key):
             print(f"Error: Missing '{key}' in the [azure] section.")
             return
 
     graph = Graph(azure_settings)
 
-    choice = -1
-
-    while choice != 0:
-        print("Please choose one of the following options:")
+    while True:
+        print("\nPlease choose one of the following options:")
         print("0. Exit")
         print("1. Display access token")
         print("2. List users")
         print("3. Make a Graph call")
 
         try:
-            choice = int(input())
+            choice = int(input("> "))
         except ValueError:
-            print("Please enter a number.\n")
+            print("Please enter a number.")
             continue
 
-        try:
-            if choice == 0:
-                print("Goodbye...")
+        if choice == 0:
+            print("Goodbye...")
+            break
 
-            elif choice == 1:
+        try:
+            if choice == 1:
                 await display_access_token(graph)
 
             elif choice == 2:
@@ -65,41 +62,40 @@ async def main():
                 await make_graph_call(graph)
 
             else:
-                print("Invalid choice!\n")
+                print("Invalid choice.")
 
         except ClientAuthenticationError as e:
-            print("\nAuthentication failed.")
-            print("Please check your:")
+            print("\n=== AUTHENTICATION FAILED ===")
+            print(e)
+            print("\nCheck:")
             print(" - Tenant ID")
             print(" - Client ID")
             print(" - Client Secret")
-            print()
-            print(e)
+            print(" - Whether the client secret has expired")
 
         except CredentialUnavailableError as e:
-            print("\nCredential unavailable:")
+            print("\n=== CREDENTIAL ERROR ===")
             print(e)
 
         except ODataError as e:
-            print("\nMicrosoft Graph returned an error:")
+            print("\n=== MICROSOFT GRAPH ERROR ===")
 
             if e.error:
-                print(f"Code: {e.error.code}")
-                print(f"Message: {e.error.message}")
+                print("Code   :", e.error.code)
+                print("Message:", e.error.message)
             else:
                 print(e)
 
         except Exception as e:
-            print("\nUnexpected error:")
+            print("\n=== UNEXPECTED ERROR ===")
             print(type(e).__name__)
             print(e)
 
 
 async def display_access_token(graph: Graph):
     token = await graph.get_app_only_token()
-    print("\nApp-only token:")
+    print("\nAccess Token:\n")
     print(token)
-    print()
 
 
 async def list_users(graph: Graph):
@@ -107,37 +103,30 @@ async def list_users(graph: Graph):
 
     if users_page and users_page.value:
         for user in users_page.value:
-            print("User:", user.display_name)
-            print("  ID:", user.id)
-            print("  Email:", user.mail)
+            print()
+            print("User :", user.display_name)
+            print("ID   :", user.id)
+            print("Email:", user.mail)
 
-        more_available = users_page.odata_next_link is not None
-        print("\nMore users available?", more_available)
-
-    print()
+        print("\nMore users:", users_page.odata_next_link is not None)
 
 
 async def make_graph_call(graph: Graph):
     org = await graph.make_graph_call()
 
-    print("Organization:", org.display_name)
-    print("Tenant ID:", org.id)
+    print("\nOrganization:", org.display_name)
+    print("Tenant ID   :", org.id)
+    print("Country     :", org.country_letter_code)
 
     if org.verified_domains:
-        print("Verified Domains:")
+        print("\nVerified Domains:")
         for domain in org.verified_domains:
             print(" -", domain.name)
 
-        print("Default Domain:", org.verified_domains[0].name)
-
-    print("Country:", org.country_letter_code)
-
     if org.technical_notification_mails:
-        print("Technical Contact Emails:")
+        print("\nTechnical Contact Emails:")
         for email in org.technical_notification_mails:
             print(" -", email)
-
-    print()
 
 
 if __name__ == "__main__":
