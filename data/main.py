@@ -1,14 +1,46 @@
 import asyncio
 import os
 from graph import Graph
+from azure.core.exceptions import ClientAuthenticationError
+from azure.identity.aio import ClientSecretCredential
 
 async def main():
     print('Python Graph App-Only Tutorial\n')
 
+    # Read credentials
+    client_id = os.getenv("CLIENT_ID")
+    tenant_id = os.getenv("TENANT_ID")
+    client_secret = os.getenv("CLIENT_SECRET")
+
+    # Validate credentials BEFORE creating Graph()
+    try:
+        # Try to get a token to verify credentials
+        test_credential = ClientSecretCredential(
+            tenant_id=tenant_id,
+            client_id=client_id,
+            client_secret=client_secret
+        )
+
+        # Attempt a simple token request
+        await test_credential.get_token("https://graph.microsoft.com/.default")
+
+    except ClientAuthenticationError as e:
+        print("❌ Invalid credentials. Please check your Tenant ID, Client ID, and Client Secret.")
+        print("Error:", e.message)
+        return
+
+    except Exception as e:
+        print("❌ Unexpected error during authentication.")
+        print("Error:", str(e))
+        return
+
+    # If we reach here → credentials are valid
+    print("✅ Credentials validated successfully.\n")
+
     config = {
-        "clientId": os.getenv("CLIENT_ID"),
-        "tenantId": os.getenv("TENANT_ID"),
-        "clientSecret": os.getenv("CLIENT_SECRET")
+        "clientId": client_id,
+        "tenantId": tenant_id,
+        "clientSecret": client_secret
     }
 
     graph = Graph(config)
@@ -43,7 +75,11 @@ async def display_access_token(graph: Graph):
     print('App-only token:', token, '\n')
 
 async def list_users(graph: Graph):
-    users_page = await graph.get_users()
+    try:
+        users_page = await graph.get_users()
+    except Exception as e:
+        print("❌ Error listing users:", str(e))
+        return
 
     if users_page and users_page.value:
         for user in users_page.value:
@@ -55,7 +91,11 @@ async def list_users(graph: Graph):
         print('\nMore users available?', more_available, '\n')
 
 async def make_graph_call(graph: Graph):
-    org = await graph.make_graph_call()
+    try:
+        org = await graph.make_graph_call()
+    except Exception as e:
+        print("❌ Error making Graph call:", str(e))
+        return
 
     print("Organization:", org.display_name)
     print("Tenant ID:", org.id)
