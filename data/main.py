@@ -1,101 +1,124 @@
 import asyncio
-import os
-from graph import Graph
+import configparser
+
 from azure.core.exceptions import ClientAuthenticationError
-from azure.identity.aio import ClientSecretCredential
+from azure.identity import CredentialUnavailableError
+from msgraph.generated.models.o_data_errors.o_data_error import ODataError
+
+from graph import Graph
+
 
 async def main():
-    print('Python Graph App-Only Tutorial\n')
+    print("Python Graph App-Only Tutorial\n")
 
-    # Read credentials
-    client_id = os.getenv("CLIENT_ID")
-    tenant_id = os.getenv("TENANT_ID")
-    client_secret = os.getenv("CLIENT_SECRET")
+    # Load settings
+    config = configparser.ConfigParser()
 
-    # Validate credentials BEFORE creating Graph()
-    try:
-        # Try to get a token to verify credentials
-        test_credential = ClientSecretCredential(
-            tenant_id=tenant_id,
-            client_id=client_id,
-            client_secret=client_secret
-        )
+    files = config.read(["config.cfg", "config.dev.cfg"])
 
-        # Attempt a simple token request
-        await test_credential.get_token("https://graph.microsoft.com/.default")
-
-    except ClientAuthenticationError as e:
-        print("❌ Invalid credentials. Please check your Tenant ID, Client ID, and Client Secret.")
-        print("Error:", e.message)
+    if not files:
+        print("Error: No configuration file found.")
         return
 
-    except Exception as e:
-        print("❌ Unexpected error during authentication.")
-        print("Error:", str(e))
+    if "azure" not in config:
+        print("Error: Missing [azure] section in configuration file.")
         return
 
-    # If we reach here → credentials are valid
-    print("✅ Credentials validated successfully.\n")
+    azure_settings = config["azure"]
 
-    config = {
-        "clientId": client_id,
-        "tenantId": tenant_id,
-        "clientSecret": client_secret
-    }
+    # Check required settings
+    required = ["clientId", "tenantId", "clientSecret"]
 
-    graph = Graph(config)
+    for key in required:
+        if key not in azure_settings or not azure_settings[key].strip():
+            print(f"Error: Missing '{key}' in the [azure] section.")
+            return
+
+    graph = Graph(azure_settings)
 
     choice = -1
 
     while choice != 0:
-        print('Please choose one of the following options:')
-        print('0. Exit')
-        print('1. Display access token')
-        print('2. List users')
-        print('3. Make a Graph call')
+        print("Please choose one of the following options:")
+        print("0. Exit")
+        print("1. Display access token")
+        print("2. List users")
+        print("3. Make a Graph call")
 
         try:
             choice = int(input())
         except ValueError:
-            choice = -1
+            print("Please enter a number.\n")
+            continue
 
-        if choice == 0:
-            print('Goodbye...')
-        elif choice == 1:
-            await display_access_token(graph)
-        elif choice == 2:
-            await list_users(graph)
-        elif choice == 3:
-            await make_graph_call(graph)
-        else:
-            print('Invalid choice!\n')
+        try:
+            if choice == 0:
+                print("Goodbye...")
+
+            elif choice == 1:
+                await display_access_token(graph)
+
+            elif choice == 2:
+                await list_users(graph)
+
+            elif choice == 3:
+                await make_graph_call(graph)
+
+            else:
+                print("Invalid choice!\n")
+
+        except ClientAuthenticationError as e:
+            print("\nAuthentication failed.")
+            print("Please check your:")
+            print(" - Tenant ID")
+            print(" - Client ID")
+            print(" - Client Secret")
+            print()
+            print(e)
+
+        except CredentialUnavailableError as e:
+            print("\nCredential unavailable:")
+            print(e)
+
+        except ODataError as e:
+            print("\nMicrosoft Graph returned an error:")
+
+            if e.error:
+                print(f"Code: {e.error.code}")
+                print(f"Message: {e.error.message}")
+            else:
+                print(e)
+
+        except Exception as e:
+            print("\nUnexpected error:")
+            print(type(e).__name__)
+            print(e)
+
 
 async def display_access_token(graph: Graph):
     token = await graph.get_app_only_token()
-    print('App-only token:', token, '\n')
+    print("\nApp-only token:")
+    print(token)
+    print()
+
 
 async def list_users(graph: Graph):
-    try:
-        users_page = await graph.get_users()
-    except Exception as e:
-        print("❌ Error listing users:", str(e))
-        return
+    users_page = await graph.get_users()
 
     if users_page and users_page.value:
         for user in users_page.value:
-            print('User:', user.display_name)
-            print('  ID:', user.id)
-            print('  Email:', user.mail)
+            print("User:", user.display_name)
+            print("  ID:", user.id)
+            print("  Email:", user.mail)
 
         more_available = users_page.odata_next_link is not None
-        print('\nMore users available?', more_available, '\n')
+        print("\nMore users available?", more_available)
+
+    print()
+
 
 async def make_graph_call(graph: Graph):
-    try:
-        org = await graph.make_graph_call()
-    except Exception as e:
-        print("❌ Error making Graph call:", str(e))
-        return
+    org = await graph.make_graph_call()
 
     print("Organization:", org.display_name)
     print("Tenant ID:", org.id)
@@ -105,7 +128,6 @@ async def make_graph_call(graph: Graph):
         for domain in org.verified_domains:
             print(" -", domain.name)
 
-    if org.verified_domains:
         print("Default Domain:", org.verified_domains[0].name)
 
     print("Country:", org.country_letter_code)
@@ -117,4 +139,6 @@ async def make_graph_call(graph: Graph):
 
     print()
 
-asyncio.run(main())
+
+if __name__ == "__main__":
+    asyncio.run(main())
